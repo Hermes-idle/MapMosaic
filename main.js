@@ -1,116 +1,154 @@
-// 初始化地图 - 使用深色主题
-var map = L.map('map', {
-    zoomControl: false
-}).setView([30, 110], 3);
-
-// 使用CartoDB深色地图
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '© OpenStreetMap, © CartoDB',
-    subdomains: 'abcd',
-    maxZoom: 20
-}).addTo(map);
-
-// 添加缩放控件到右下角
-L.control.zoom({
-    position: 'bottomright'
-}).addTo(map);
-
-// 状态变量
-var currentColor = '#ff6b6b';
-var pixelCount = 0;
-var markers = [];
-
-// 颜色选择器
-document.getElementById('colorInput').addEventListener('input', function(e) {
-    currentColor = e.target.value;
+// 初始化 MapLibre 地图
+const map = new maplibregl.Map({
+    container: 'map',
+    style: {
+        version: 8,
+        sources: {
+            'osm': {
+                type: 'raster',
+                tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
+                tileSize: 256,
+                attribution: '© OpenStreetMap'
+            }
+        },
+        layers: [{
+            id: 'osm',
+            type: 'raster',
+            source: 'osm'
+        }]
+    },
+    center: [0, 20],
+    zoom: 1.5,
+    pitch: 0,
+    bearing: 0
 });
 
-// 点击地图添加像素
-map.on('click', function(e) {
-    // 创建像素标记
-    var pixel = L.circleMarker(e.latlng, {
-        radius: 8,
-        fillColor: currentColor,
-        color: currentColor,
-        fillOpacity: 0.9,
-        opacity: 1,
-        weight: 2
-    }).addTo(map);
+// 颜色配置
+const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+    '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D7BDE2'
+];
+
+let currentColor = colors[0];
+let pixels = [];
+let pixelCount = 0;
+
+// 初始化颜色网格
+function initColorGrid() {
+    const grid = document.getElementById('colorGrid');
+    colors.forEach(color => {
+        const colorOption = document.createElement('div');
+        colorOption.className = `color-option ${color === currentColor ? 'active' : ''}`;
+        colorOption.style.backgroundColor = color;
+        colorOption.onclick = () => selectColor(color);
+        grid.appendChild(colorOption);
+    });
+}
+
+function selectColor(color) {
+    currentColor = color;
+    document.querySelectorAll('.color-option').forEach(option => {
+        option.classList.remove('active');
+    });
+    document.querySelector(`.color-option[style*="${color}"]`).classList.add('active');
+}
+
+// 添加像素到地图
+function addPixel(lngLat) {
+    const pixelId = `pixel-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // 添加动画效果
-    pixel.setStyle({ radius: 0 });
-    setTimeout(function() {
-        pixel.setStyle({ radius: 8 });
-    }, 50);
-    
-    // 添加发光效果
-    pixel._path.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
-    
-    // 绑定弹出窗口
-    pixel.bindPopup(`
-        <div style="text-align: center; padding: 8px;">
-            <div style="width: 20px; height: 20px; background: ${currentColor}; 
-                       border-radius: 50%; margin: 0 auto 8px;"></div>
-            <div style="font-weight: 600;">像素创作</div>
-            <div style="font-size: 11px; color: #666; margin-top: 4px;">
-                坐标: ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}
-            </div>
-        </div>
-    `);
-    
-    markers.push(pixel);
-    pixelCount++;
-    document.getElementById('pixelCount').textContent = pixelCount;
-    
-    // 涟漪动画
-    var ripple = L.circle(e.latlng, {
-        radius: 2,
-        color: currentColor,
-        fillColor: currentColor,
-        fillOpacity: 0.3,
-        opacity: 1
-    }).addTo(map);
-    
-    var radius = 2;
-    function animateRipple() {
-        radius += 6;
-        ripple.setRadius(radius);
-        ripple.setStyle({
-            fillOpacity: 0.3 * (1 - radius / 40),
-            opacity: 1 - radius / 40
+    // 添加像素点源
+    if (!map.getSource('pixels')) {
+        map.addSource('pixels', {
+            type: 'geojson',
+            data: {
+                type: 'FeatureCollection',
+                features: []
+            }
         });
         
-        if (radius < 40) {
-            requestAnimationFrame(animateRipple);
-        } else {
-            map.removeLayer(ripple);
-        }
+        map.addLayer({
+            id: 'pixels',
+            type: 'circle',
+            source: 'pixels',
+            paint: {
+                'circle-radius': 8,
+                'circle-color': ['get', 'color'],
+                'circle-opacity': 0.9,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': ['get', 'color'],
+                'circle-stroke-opacity': 1
+            }
+        });
     }
-    animateRipple();
+    
+    // 创建新像素
+    const newPixel = {
+        type: 'Feature',
+        geometry: {
+            type: 'Point',
+            coordinates: [lngLat.lng, lngLat.lat]
+        },
+        properties: {
+            id: pixelId,
+            color: currentColor,
+            timestamp: Date.now()
+        }
+    };
+    
+    // 更新数据
+    const source = map.getSource('pixels');
+    const currentData = source._data;
+    currentData.features.push(newPixel);
+    source.setData(currentData);
+    
+    pixels.push(newPixel);
+    pixelCount++;
+    updateStats();
+    
+    // 动画效果
+    setTimeout(() => {
+        map.setPaintProperty('pixels', 'circle-radius', 6);
+    }, 50);
+}
+
+// 更新统计信息
+function updateStats() {
+    document.getElementById('pixelCount').textContent = pixelCount;
+}
+
+// 坐标显示
+function updateCoordinates(lngLat) {
+    document.getElementById('coordinates').textContent = 
+        `坐标: ${lngLat.lng.toFixed(2)}, ${lngLat.lat.toFixed(2)}`;
+}
+
+// 地图事件
+map.on('load', () => {
+    initColorGrid();
+    
+    // 点击添加像素
+    map.on('click', (e) => {
+        addPixel(e.lngLat);
+    });
+    
+    // 鼠标移动显示坐标
+    map.on('mousemove', (e) => {
+        updateCoordinates(e.lngLat);
+    });
 });
 
 // 添加一些示例像素
-setTimeout(function() {
-    var examples = [
-        { lat: 39.9042, lng: 116.4074, color: '#ff6b6b' },
-        { lat: 40.7128, lng: -74.0060, color: '#4ecdc4' },
-        { lat: 48.8566, lng: 2.3522, color: '#45b7d1' },
-        { lat: 35.6762, lng: 139.6503, color: '#96ceb4' }
+setTimeout(() => {
+    const examples = [
+        { lng: 116.4074, lat: 39.9042 },
+        { lng: -74.0060, lat: 40.7128 },
+        { lng: 2.3522, lat: 48.8566 },
+        { lng: 139.6503, lat: 35.6762 }
     ];
     
-    examples.forEach(function(point) {
-        var marker = L.circleMarker([point.lat, point.lng], {
-            radius: 6,
-            fillColor: point.color,
-            color: point.color,
-            fillOpacity: 0.7
-        }).addTo(map).bindPopup('示例像素');
-        
-        markers.push(marker);
-        pixelCount++;
+    examples.forEach(coord => {
+        addPixel(coord);
     });
-    
-    document.getElementById('pixelCount').textContent = pixelCount;
-}, 1000);
-
-console.log('🎨 MapMosaic 加载完成！');
+}, 2000);
