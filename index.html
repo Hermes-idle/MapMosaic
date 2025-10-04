@@ -4,105 +4,279 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pixel Canvas · 世界像素画布</title>
+    
+    <!-- MapLibre GL -->
     <script src='https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css' rel='stylesheet' />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- 字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Inter', sans-serif;
-            background: #000;
-            color: white;
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000000;
+            color: #ffffff;
             overflow: hidden;
+            height: 100vh;
         }
-        #map { 
+
+        #map {
             position: absolute;
             top: 0;
             bottom: 0;
             width: 100%;
         }
+
+        /* 控制面板 */
         .control-panel {
             position: absolute;
             top: 20px;
             left: 20px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(15, 15, 15, 0.95);
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 16px;
-            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 24px;
             min-width: 280px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
         }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            font-size: 24px;
+        }
+
         .title {
             font-size: 20px;
             font-weight: 700;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
+
+        /* 颜色选择器 */
+        .color-section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .color-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 8px;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
+
         .color-option {
             width: 32px;
             height: 32px;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
             border: 2px solid transparent;
-            transition: all 0.2s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
         }
+
+        .color-option::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .color-option:hover::before {
+            left: 100%;
+        }
+
         .color-option:hover {
+            transform: scale(1.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .color-option.active {
+            border-color: #ffffff;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
             transform: scale(1.1);
         }
-        .color-option.active {
-            border-color: white;
-            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
-        }
-        .stats {
+
+        .custom-color {
+            width: 100%;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
-        .stat {
-            font-size: 12px;
-            color: #ccc;
+
+        .custom-color:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* 统计信息 */
+        .stats {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-item {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 4px;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
         }
+
+        .stat-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .stat-label {
+            color: #aaa;
+        }
+
         .stat-value {
-            color: white;
             font-weight: 600;
+            color: #fff;
         }
+
+        /* 坐标显示 */
         .coordinates {
             position: absolute;
             bottom: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 8px 12px;
-            border-radius: 8px;
+            z-index: 1000;
+            background: rgba(15, 15, 15, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 12px 16px;
             font-size: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ccc;
+        }
+
+        /* 工具提示 */
+        .tooltip {
+            position: absolute;
+            background: rgba(15, 15, 15, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #fff;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 2000;
+        }
+
+        /* 加载动画 */
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #ff6b6b;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 像素动画 */
+        @keyframes pixelPop {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .pixel-marker {
+            animation: pixelPop 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
     </style>
 </head>
 <body>
+    <!-- 加载动画 -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- 控制面板 -->
     <div class="control-panel">
-        <div class="title">🎨 Pixel Canvas</div>
-        <div class="color-grid" id="colorGrid"></div>
+        <div class="header">
+            <div class="logo">🎨</div>
+            <div class="title">Pixel Canvas</div>
+        </div>
+        
+        <div class="color-section">
+            <div class="section-title">画笔颜色</div>
+            <div class="color-grid" id="colorGrid">
+                <!-- 颜色通过JS动态生成 -->
+            </div>
+            <input type="color" id="customColor" class="custom-color" value="#ff6b6b">
+        </div>
+        
         <div class="stats">
-            <div class="stat">像素数量: <span class="stat-value" id="pixelCount">0</span></div>
-            <div class="stat">在线用户: <span class="stat-value" id="onlineUsers">1</span></div>
+            <div class="stat-item">
+                <span class="stat-label">像素数量</span>
+                <span class="stat-value" id="pixelCount">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">在线用户</span>
+                <span class="stat-value" id="onlineUsers">1</span>
+            </div>
         </div>
     </div>
-    
-    <div class="coordinates" id="coordinates">坐标: 0, 0</div>
-    
+
+    <!-- 坐标显示 -->
+    <div class="coordinates" id="coordinates">经纬度: 0, 0</div>
+
+    <!-- 工具提示 -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- 地图容器 -->
     <div id="map"></div>
 
     <script src="main.js"></script>
